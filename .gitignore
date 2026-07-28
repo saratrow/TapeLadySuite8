@@ -1,0 +1,44 @@
+# Secrets
+.env
+.env.*
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Database
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Customer data
+clients/
+!clients/.gitkeep
+
+# Backups
+Update_Backups/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Logs
+*.log
+
+# Build artifacts
+dist/
+build/
+*.spec
+
+# Temporary
+*.tmp
+*.bak

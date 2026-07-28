@@ -1,0 +1,28 @@
+TapeLadySuite8
+Copyright (c) 2026 Sara Trowbridge
+All Rights Reserved.
+
+This software, including all source code, executable files, documentation,
+images, graphics, and associated materials, is the exclusive property of
+Sara Trowbridge.
+
+Unauthorized copying, modification, distribution, sublicensing, reverse
+engineering, public display, or commercial use of this software, in whole
+or in part, is strictly prohibited without the prior written permission
+of the copyright holder.
+
+This repository is made available for development, collaboration, version
+control, and backup purposes only. Publication of this repository does not
+grant permission to use, copy, modify, or redistribute the software or any
+portion thereof.
+
+"Tape Lady", "TapeLadySuite8", and all associated branding, logos, artwork,
+and business materials are the intellectual property of Sara Trowbridge.
+
+THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. IN NO EVENT SHALL
+THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF,
+OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
