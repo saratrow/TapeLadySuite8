@@ -6,8 +6,9 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QFrame, QGridLayout, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
-    QPushButton, QScrollArea, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
+    QFrame, QGridLayout, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
+    QMainWindow, QMessageBox, QPushButton, QScrollArea, QStackedWidget,
+    QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
 )
 
 from ..core.database import Database
@@ -47,6 +48,7 @@ class DashboardWindow(QMainWindow):
         self.setStyleSheet(DARK_THEME)
         self._build()
         self.refresh()
+        self.show_home()
 
     def _build(self):
         central = QWidget()
@@ -55,59 +57,30 @@ class DashboardWindow(QMainWindow):
         root.setSpacing(0)
         root.addWidget(self._sidebar())
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        content = QWidget()
-        self.content_layout = QVBoxLayout(content)
-        self.content_layout.setContentsMargins(28, 24, 28, 24)
-        self.content_layout.setSpacing(18)
+        self.content_stack = QStackedWidget()
+        self.home_page = QWidget()
+        self.customer_page = QWidget()
+        self.project_page = QWidget()
 
-        header = QHBoxLayout()
-        greeting = QVBoxLayout()
-        title = QLabel(self._greeting())
-        title.setObjectName("pageTitle")
-        subtitle = QLabel("Create customers, projects, folders, and activity in one workflow.")
-        subtitle.setObjectName("muted")
-        greeting.addWidget(title)
-        greeting.addWidget(subtitle)
-        header.addLayout(greeting)
-        header.addStretch()
+        self.home_layout = QVBoxLayout(self.home_page)
+        self.home_layout.setContentsMargins(28, 24, 28, 24)
+        self.home_layout.setSpacing(18)
+        self._build_home_content()
 
-        new_project = QPushButton("+ New Customer / Project")
-        new_project.setObjectName("primary")
-        new_project.clicked.connect(self.create_customer_project)
-        header.addWidget(new_project)
-        self.content_layout.addLayout(header)
+        self.customer_layout = QVBoxLayout(self.customer_page)
+        self.customer_layout.setContentsMargins(28, 24, 28, 24)
+        self.customer_layout.setSpacing(18)
+        self._build_customer_content()
 
-        metrics = QHBoxLayout()
-        self.receipt_active_metric = self._metric_card("Active Receipt Jobs", "0")
-        self.receipt_waiting_metric = self._metric_card("Waiting Review", "0")
-        self.receipt_completed_metric = self._metric_card("Completed Jobs", "0")
-        metrics.addWidget(self.receipt_active_metric)
-        metrics.addWidget(self.receipt_waiting_metric)
-        metrics.addWidget(self.receipt_completed_metric)
-        self.content_layout.addLayout(metrics)
+        self.project_layout = QVBoxLayout(self.project_page)
+        self.project_layout.setContentsMargins(28, 24, 28, 24)
+        self.project_layout.setSpacing(18)
+        self._build_project_content()
 
-        section = QLabel("TAPE LADY BUSINESS SUITE MODULES")
-        section.setObjectName("sectionTitle")
-        self.content_layout.addWidget(section)
-
-        modules_grid = QGridLayout()
-        modules_grid.setSpacing(14)
-        for index, module in enumerate(MODULES):
-            modules_grid.addWidget(self._module_card(module), index // 3, index % 3)
-        self.content_layout.addLayout(modules_grid)
-
-        lower = QHBoxLayout()
-        lower.setSpacing(14)
-        lower.addWidget(self._recent_projects_card(), 3)
-        lower.addWidget(self._activity_card(), 2)
-        self.content_layout.addLayout(lower)
-        self.content_layout.addStretch()
-
-        scroll.setWidget(content)
-        root.addWidget(scroll, 1)
+        self.content_stack.addWidget(self.home_page)
+        self.content_stack.addWidget(self.customer_page)
+        self.content_stack.addWidget(self.project_page)
+        root.addWidget(self.content_stack, 1)
         self.setCentralWidget(central)
 
     def _sidebar(self):
@@ -140,6 +113,115 @@ class DashboardWindow(QMainWindow):
         version.setObjectName("muted")
         layout.addWidget(version)
         return sidebar
+
+    def _build_home_content(self):
+        header = QHBoxLayout()
+        greeting = QVBoxLayout()
+        title = QLabel(self._greeting())
+        title.setObjectName("pageTitle")
+        subtitle = QLabel("Work from customers and projects, then open the right tool for the job.")
+        subtitle.setObjectName("muted")
+        greeting.addWidget(title)
+        greeting.addWidget(subtitle)
+        header.addLayout(greeting)
+        header.addStretch()
+
+        new_project = QPushButton("+ New Customer")
+        new_project.setObjectName("primary")
+        new_project.clicked.connect(self.create_customer_project)
+        header.addWidget(new_project)
+        self.home_layout.addLayout(header)
+
+        summary = QGridLayout()
+        summary.setSpacing(14)
+        self.recent_customers_table = QTableWidget(0, 3)
+        self.recent_customers_table.setHorizontalHeaderLabels(["Customer", "Phone", "Email"])
+        self.recent_customers_table.verticalHeader().setVisible(False)
+        self.recent_customers_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.recent_customers_table.doubleClicked.connect(self.open_selected_customer)
+        summary.addWidget(self._section_card("Recent Customers", self.recent_customers_table), 0, 0)
+
+        self.active_projects_table = QTableWidget(0, 3)
+        self.active_projects_table.setHorizontalHeaderLabels(["Customer", "Project", "Status"])
+        self.active_projects_table.verticalHeader().setVisible(False)
+        self.active_projects_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.active_projects_table.doubleClicked.connect(self.open_selected_project)
+        summary.addWidget(self._section_card("Active Projects", self.active_projects_table), 0, 1)
+
+        continue_last = QFrame()
+        continue_last.setObjectName("card")
+        continue_layout = QVBoxLayout(continue_last)
+        continue_title = QLabel("Continue Last Project")
+        continue_title.setObjectName("sectionTitle")
+        self.last_project_label = QLabel("No project yet")
+        self.last_project_label.setObjectName("muted")
+        self.continue_button = QPushButton("Open Last Project")
+        self.continue_button.clicked.connect(self.continue_last_project)
+        continue_layout.addWidget(continue_title)
+        continue_layout.addWidget(self.last_project_label)
+        continue_layout.addWidget(self.continue_button)
+        summary.addWidget(continue_last, 1, 0)
+
+        activity = QFrame()
+        activity.setObjectName("card")
+        activity_layout = QVBoxLayout(activity)
+        activity_title = QLabel("Today's Activity")
+        activity_title.setObjectName("sectionTitle")
+        self.activity_feed = QListWidget()
+        activity_layout.addWidget(activity_title)
+        activity_layout.addWidget(self.activity_feed)
+        summary.addWidget(activity, 1, 1)
+
+        self.home_layout.addLayout(summary)
+
+        tools = QLabel("TOOLS")
+        tools.setObjectName("sectionTitle")
+        self.home_layout.addWidget(tools)
+        modules_grid = QGridLayout()
+        modules_grid.setSpacing(14)
+        for index, module in enumerate(MODULES):
+            modules_grid.addWidget(self._module_card(module), index // 3, index % 3)
+        self.home_layout.addLayout(modules_grid)
+
+    def _build_customer_content(self):
+        self.customer_details = QLabel("Customer")
+        self.customer_details.setWordWrap(True)
+        self.customer_details.setObjectName("pageTitle")
+        self.customer_layout.addWidget(self.customer_details)
+
+        self.customer_projects = QTableWidget(0, 3)
+        self.customer_projects.setHorizontalHeaderLabels(["Project", "Type", "Status"])
+        self.customer_projects.verticalHeader().setVisible(False)
+        self.customer_projects.doubleClicked.connect(self.open_selected_project)
+        self.customer_layout.addWidget(self.customer_projects)
+
+        new_project = QPushButton("+ New Project")
+        new_project.setObjectName("primary")
+        new_project.clicked.connect(self.create_customer_project)
+        self.customer_layout.addWidget(new_project)
+
+    def _build_project_content(self):
+        self.project_header = QLabel("Project")
+        self.project_header.setObjectName("pageTitle")
+        self.project_layout.addWidget(self.project_header)
+
+        self.project_details = QLabel("")
+        self.project_details.setWordWrap(True)
+        self.project_details.setObjectName("muted")
+        self.project_layout.addWidget(self.project_details)
+
+        self.project_tools = QGridLayout()
+        self.project_layout.addLayout(self.project_tools)
+
+    def _section_card(self, title, widget):
+        card = QFrame()
+        card.setObjectName("card")
+        layout = QVBoxLayout(card)
+        header = QLabel(title)
+        header.setObjectName("sectionTitle")
+        layout.addWidget(header)
+        layout.addWidget(widget)
+        return card
 
     def _metric_card(self, label, value):
         card = QFrame()
@@ -254,11 +336,76 @@ class DashboardWindow(QMainWindow):
             f"Folder:\n{result.folder}",
         )
 
+    def show_home(self):
+        self.content_stack.setCurrentWidget(self.home_page)
+
+    def show_customer(self, customer_id):
+        self.customer_details.setText("Loading customer...")
+        customer = self.customers.get(customer_id)
+        if not customer:
+            self.show_home()
+            return
+        self.customer_details.setText(
+            f"<b>{customer['name']}</b><br>"
+            f"Phone: {customer['phone'] or '—'}<br>"
+            f"Email: {customer['email'] or '—'}<br>"
+            f"Notes: {customer['notes'] or '—'}"
+        )
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                "SELECT name, project_type, status, id FROM projects WHERE customer_id = ? ORDER BY updated_at DESC",
+                (str(customer_id),),
+            ).fetchall()
+        self.customer_projects.setRowCount(len(rows))
+        for row_index, row in enumerate(rows):
+            for col, value in enumerate((row['name'], row['project_type'], row['status'])):
+                item = QTableWidgetItem(value or "")
+                if col == 0:
+                    item.setData(Qt.ItemDataRole.UserRole, row['id'])
+                self.customer_projects.setItem(row_index, col, item)
+        self.content_stack.setCurrentWidget(self.customer_page)
+
+    def show_project(self, project_id):
+        project_row = self.projects.get(project_id)
+        if not project_row:
+            self.show_home()
+            return
+        customer_row = self.customers.get(project_row['customer_id'])
+        project_type = project_row['project_type']
+        status = project_row['status']
+        self.project_header.setText(
+            f"{customer_row['name']}\n{project_row['name']}\nProject Type: {project_type}\nStatus: {status}"
+        )
+
+        while self.project_tools.count():
+            item = self.project_tools.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+
+        if project_type == "Receipt Processing":
+            tool_labels = ["Import Receipts", "Review Queue", "Export", "Upload to QuickBooks", "Archive"]
+        elif project_type == "Media Transfer":
+            tool_labels = ["Capture Video", "Trim Video", "Export MP4", "Archive"]
+        elif project_type in {"Photo Scanning", "Document Scanning"}:
+            tool_labels = ["Import Images", "OCR", "Rename", "Export", "Archive"]
+        else:
+            tool_labels = ["Open Folder", "Archive"]
+
+        for index, tool in enumerate(tool_labels):
+            button = QPushButton(tool)
+            button.clicked.connect(lambda checked=False, text=tool: self.open_module(text))
+            self.project_tools.addWidget(button, index // 3, index % 3)
+        self.content_stack.setCurrentWidget(self.project_page)
+
     def open_module(self, name):
         if name == "Dashboard":
             return
         if name == "Receipt Manager":
             self.launch_receipt_manager_from_selection()
+            return
+        if name in {"Import Receipts", "Review Queue", "Export", "Upload to QuickBooks", "Archive", "Capture Video", "Trim Video", "Export MP4", "Import Images", "OCR", "Rename", "Open Folder"}:
+            QMessageBox.information(self, name, f"{name} is available through the TLBS workflow layer.")
             return
         QMessageBox.information(
             self,
@@ -271,6 +418,25 @@ class DashboardWindow(QMainWindow):
         self.projects_root.mkdir(parents=True, exist_ok=True)
         os.startfile(self.projects_root)
 
+    def open_selected_customer(self):
+        row = self.recent_customers_table.currentRow()
+        if row < 0:
+            return
+        customer_item = self.recent_customers_table.item(row, 0)
+        customer_id = customer_item.data(Qt.ItemDataRole.UserRole) if customer_item else None
+        if customer_id:
+            self.show_customer(customer_id)
+
+    def open_selected_project(self):
+        table = self.sender()
+        row = table.currentRow()
+        if row < 0:
+            return
+        item = table.item(row, 0)
+        project_id = item.data(Qt.ItemDataRole.UserRole) if item else None
+        if project_id:
+            self.show_project(project_id)
+
     def open_selected_project_folder(self):
         row = self.project_table.currentRow()
         if row < 0:
@@ -280,6 +446,13 @@ class DashboardWindow(QMainWindow):
         path = payload.get("folder_path") if isinstance(payload, dict) else payload
         if path and Path(path).exists():
             os.startfile(path)
+
+    def continue_last_project(self):
+        rows = self.projects.list_recent(1)
+        if not rows:
+            QMessageBox.information(self, "No project", "Create a customer and project to continue a workflow.")
+            return
+        self.show_project(rows[0]["id"])
 
     def launch_receipt_manager_from_selection(self):
         row = self.project_table.currentRow()
