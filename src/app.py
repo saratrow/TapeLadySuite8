@@ -144,7 +144,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__(); self.setWindowTitle(f'{APP_NAME} v{VERSION}'); self.resize(1100,720);
         if APP_ICON.exists(): self.setWindowIcon(QIcon(str(APP_ICON)))
-        self.db=Database(DB_PATH); self.client_ids={}; self.job_records=[]; self.worker=None; self.review_window=None; self.build_menu(); self.build_ui(); self.refresh_clients(); restore_or_center(self, "main_window")
+        self.db=Database(DB_PATH); self.client_ids={}; self.job_records=[]; self.worker=None; self.review_window=None; self.build_menu(); self.build_ui(); self.refresh_clients(); self.apply_tlbs_context(); restore_or_center(self, "main_window")
     def build_menu(self):
         s=QAction('Settings',self); s.triggered.connect(self.open_settings); a=QAction(f'About {APP_NAME}',self); a.triggered.connect(lambda:AboutDialog(self).exec()); file_menu=self.menuBar().addMenu('File'); file_menu.addAction(s); shortcut=QAction('Create Desktop Shortcut',self); shortcut.triggered.connect(self.create_desktop_shortcut); file_menu.addAction(shortcut); help_menu=self.menuBar().addMenu('Help'); diagnostics=QAction('Diagnostics',self); diagnostics.triggered.connect(lambda:DiagnosticsDialog(self).exec()); help_menu.addAction(diagnostics); help_menu.addAction(a)
     def create_desktop_shortcut(self):
@@ -221,6 +221,30 @@ class MainWindow(QMainWindow):
 
         footer=QHBoxLayout(); footer.addStretch(1)
         footer_text=QLabel(f"TapeLadySuite8 Receipt Manager  •  Version {VERSION}"); footer_text.setObjectName('mutedText'); footer.addWidget(footer_text); outer.addLayout(footer)
+
+    def apply_tlbs_context(self):
+        customer_name=os.getenv('TLBS_RECEIPT_CONTEXT_CUSTOMER','').strip()
+        project_name=os.getenv('TLBS_RECEIPT_CONTEXT_PROJECT','').strip()
+        job_root=os.getenv('TLBS_RECEIPT_CONTEXT_JOB_ROOT','').strip()
+        if not customer_name and not project_name and not job_root:
+            return
+        try:
+            client_id=None
+            for cid, name in self.db.list_clients():
+                if name.casefold()==customer_name.casefold():
+                    client_id=cid
+                    break
+            if client_id and project_name and job_root:
+                try:
+                    self.db.add_job(client_id, project_name, job_root)
+                except Exception:
+                    pass
+                self.refresh_clients()
+                if customer_name in self.client_ids:
+                    self.clients.setCurrentRow(self.clients.findItems(customer_name, Qt.MatchExactly)[0].row())
+                    self.client_changed(customer_name)
+        except Exception:
+            pass
 
     def refresh_subtitle(self):
         self.version_badge.setText(f'v{VERSION}')
