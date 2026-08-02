@@ -503,55 +503,42 @@ class DashboardWindow(QMainWindow):
         QMessageBox.information(self, "Receipt Manager launched", f"Receipt Manager job created for {customer.name} / {project.name}.")
 
     def refresh(self):
-        self._set_metric(self.receipt_active_metric, self.receipt_jobs.count_by_status("active"))
-        self._set_metric(self.receipt_waiting_metric, self.receipt_jobs.count_by_status("waiting_review"))
-        self._set_metric(self.receipt_completed_metric, self.receipt_jobs.count_by_status("completed"))
+        customer_rows = self.customers.list_recent(5)
+        self.recent_customers_table.setRowCount(len(customer_rows))
+        for row_index, row in enumerate(customer_rows):
+            for col, value in enumerate((row["name"], row["phone"], row["email"])):
+                item = QTableWidgetItem(value or "")
+                if col == 0:
+                    item.setData(Qt.ItemDataRole.UserRole, row["id"])
+                self.recent_customers_table.setItem(row_index, col, item)
 
-        rows = self.projects.list_recent(10)
-        self.project_table.setRowCount(len(rows))
-        for row_index, row in enumerate(rows):
+        active_projects = self.projects.list_recent(10)
+        self.active_projects_table.setRowCount(len(active_projects))
+        for row_index, row in enumerate(active_projects):
             values = (
                 row["customer_name"],
                 row["name"],
-                row["project_type"],
                 row["status"],
             )
             for col, value in enumerate(values):
                 item = QTableWidgetItem(value or "")
-                if col == 0:
-                    item.setData(
-                        Qt.ItemDataRole.UserRole,
-                        {
-                            "folder_path": row["folder_path"],
-                            "project_id": row["id"],
-                            "customer_id": row["customer_id"],
-                        },
-                    )
-                self.project_table.setItem(row_index, col, item)
+                if col == 1:
+                    item.setData(Qt.ItemDataRole.UserRole, row["id"])
+                self.active_projects_table.setItem(row_index, col, item)
 
-        while self.activity_layout.count():
-            item = self.activity_layout.takeAt(0)
-            widget = item.widget()
-            if widget:
-                widget.deleteLater()
+        last_project = self.projects.list_recent(1)
+        if last_project:
+            self.last_project_label.setText(
+                f"{last_project[0]['customer_name']} • {last_project[0]['name']}"
+            )
 
         activities = self.activities.list_recent(7)
-        if not activities:
-            empty = QLabel(
-                "No activity yet. Create the first customer and project to begin."
+        self.activity_feed.clear()
+        for activity in activities:
+            timestamp = datetime.fromisoformat(activity["occurred_at"])
+            self.activity_feed.addItem(
+                f"{activity['title']}\n{activity['details'] or ''}\n{timestamp:%b %d, %I:%M %p}"
             )
-            empty.setObjectName("muted")
-            self.activity_layout.addWidget(empty)
-        else:
-            for activity in activities:
-                timestamp = datetime.fromisoformat(activity["occurred_at"])
-                text = QLabel(
-                    f"<b>{activity['title']}</b><br>"
-                    f"{activity['details'] or ''} "
-                    f"<span style='color:#8f9aa3'>• {timestamp:%b %d, %I:%M %p}</span>"
-                )
-                text.setWordWrap(True)
-                self.activity_layout.addWidget(text)
 
     @staticmethod
     def _greeting():
