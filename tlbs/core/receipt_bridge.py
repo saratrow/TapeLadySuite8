@@ -56,9 +56,12 @@ class ReceiptProjectBridgeService:
 
     def launch_receipt_manager(self, customer: Customer, project: Project, job_root: Path) -> subprocess.Popen[str]:
         env = os.environ.copy()
+        env["TLBS_RECEIPT_CONTEXT_CUSTOMER_ID"] = str(customer.id)
+        env["TLBS_RECEIPT_CONTEXT_PROJECT_ID"] = str(project.id)
         env["TLBS_RECEIPT_CONTEXT_CUSTOMER"] = customer.name
         env["TLBS_RECEIPT_CONTEXT_PROJECT"] = project.name
         env["TLBS_RECEIPT_CONTEXT_JOB_ROOT"] = str(job_root)
+        env["TLBS_RECEIPT_CONTEXT_FOLDER_PATH"] = str(project.folder_path or job_root)
 
         app_root = Path(__file__).resolve().parents[2]
         src_app = app_root / "src" / "app.py"

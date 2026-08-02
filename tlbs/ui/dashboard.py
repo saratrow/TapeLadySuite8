@@ -109,7 +109,7 @@ class DashboardWindow(QMainWindow):
             layout.addWidget(button)
 
         layout.addStretch()
-        version = QLabel(f"{APP_NAME}\nVersion {VERSION}\nSprint 2")
+        version = QLabel(f"{APP_NAME}\nVersion {VERSION}\nSprint 4 Phase 1")
         version.setObjectName("muted")
         layout.addWidget(version)
         return sidebar
@@ -213,6 +213,10 @@ class DashboardWindow(QMainWindow):
         self.project_tools = QGridLayout()
         self.project_layout.addLayout(self.project_tools)
 
+        self.active_customer_id = None
+        self.active_project_id = None
+        self.active_project_context = None
+
     def _section_card(self, title, widget):
         card = QFrame()
         card.setObjectName("card")
@@ -259,34 +263,6 @@ class DashboardWindow(QMainWindow):
         layout.addStretch()
         layout.addWidget(status)
         layout.addWidget(button)
-        return card
-
-    def _recent_projects_card(self):
-        card = QFrame()
-        card.setObjectName("card")
-        layout = QVBoxLayout(card)
-        title_row = QHBoxLayout()
-        title = QLabel("RECENT PROJECTS")
-        title.setObjectName("sectionTitle")
-        open_folder = QPushButton("Open Projects Folder")
-        open_folder.clicked.connect(self.open_projects_folder)
-        title_row.addWidget(title)
-        title_row.addStretch()
-        title_row.addWidget(open_folder)
-
-        self.project_table = QTableWidget(0, 4)
-        self.project_table.setHorizontalHeaderLabels(
-            ["Customer", "Project", "Type", "Status"]
-        )
-        self.project_table.horizontalHeader().setStretchLastSection(True)
-        self.project_table.verticalHeader().setVisible(False)
-        self.project_table.setSelectionBehavior(
-            QTableWidget.SelectionBehavior.SelectRows
-        )
-        self.project_table.doubleClicked.connect(self.open_selected_project_folder)
-
-        layout.addLayout(title_row)
-        layout.addWidget(self.project_table)
         return card
 
     def _activity_card(self):
@@ -340,6 +316,9 @@ class DashboardWindow(QMainWindow):
         self.content_stack.setCurrentWidget(self.home_page)
 
     def show_customer(self, customer_id):
+        self.active_customer_id = customer_id
+        self.active_project_id = None
+        self.active_project_context = None
         self.customer_details.setText("Loading customer...")
         customer = self.customers.get(customer_id)
         if not customer:
@@ -373,6 +352,15 @@ class DashboardWindow(QMainWindow):
         customer_row = self.customers.get(project_row['customer_id'])
         project_type = project_row['project_type']
         status = project_row['status']
+        self.active_customer_id = project_row['customer_id']
+        self.active_project_id = project_row['id']
+        self.active_project_context = {
+            "customer_id": project_row['customer_id'],
+            "project_id": project_row['id'],
+            "customer_name": customer_row['name'],
+            "project_name": project_row['name'],
+            "folder_path": project_row['folder_path'],
+        }
         self.project_header.setText(
             f"{customer_row['name']}\n{project_row['name']}\nProject Type: {project_type}\nStatus: {status}"
         )
@@ -402,9 +390,12 @@ class DashboardWindow(QMainWindow):
         if name == "Dashboard":
             return
         if name == "Receipt Manager":
-            self.launch_receipt_manager_from_selection()
+            self.launch_receipt_manager_from_active_context()
             return
-        if name in {"Import Receipts", "Review Queue", "Export", "Upload to QuickBooks", "Archive", "Capture Video", "Trim Video", "Export MP4", "Import Images", "OCR", "Rename", "Open Folder"}:
+        if name in {"Import Receipts", "Review Queue", "Export"}:
+            self.launch_receipt_manager_from_active_context(name)
+            return
+        if name in {"Upload to QuickBooks", "Archive", "Capture Video", "Trim Video", "Export MP4", "Import Images", "OCR", "Rename", "Open Folder"}:
             QMessageBox.information(self, name, f"{name} is available through the TLBS workflow layer.")
             return
         QMessageBox.information(
@@ -437,16 +428,6 @@ class DashboardWindow(QMainWindow):
         if project_id:
             self.show_project(project_id)
 
-    def open_selected_project_folder(self):
-        row = self.project_table.currentRow()
-        if row < 0:
-            return
-        item = self.project_table.item(row, 0)
-        payload = item.data(Qt.ItemDataRole.UserRole) if item else None
-        path = payload.get("folder_path") if isinstance(payload, dict) else payload
-        if path and Path(path).exists():
-            os.startfile(path)
-
     def continue_last_project(self):
         rows = self.projects.list_recent(1)
         if not rows:
@@ -454,20 +435,31 @@ class DashboardWindow(QMainWindow):
             return
         self.show_project(rows[0]["id"])
 
-    def launch_receipt_manager_from_selection(self):
-        row = self.project_table.currentRow()
-        if row < 0:
-            QMessageBox.information(self, "Select a project", "Select a TLBS project first.")
+    def launch_receipt_manager_from_active_context(self, tool_name: str | None = None):
+        if not self.active_project_context:
+            QMessageBox.information(
+                self,
+                "Select a Receipt Processing project",
+                "Select or create a Receipt Processing project first, then launch the Receipt Manager from that active project context.",
+            )
             return
-        item = self.project_table.item(row, 0)
-        payload = item.data(Qt.ItemDataRole.UserRole) if item else None
-        if not isinstance(payload, dict):
-            QMessageBox.information(self, "Select a project", "Select a TLBS project first.")
-            return
-        project_row = self.projects.get(payload["project_id"])
-        customer_row = self.customers.get(payload["customer_id"])
+
+        project_row = self.projects.get(self.active_project_context["project_id"])
+        customer_row = self.customers.get(self.active_project_context["customer_id"])
         if not project_row or not customer_row:
-            QMessageBox.warning(self, "Could not resolve project", "The selected TLBS project could not be loaded.")
+            QMessageBox.warning(
+                self,
+                "Could not resolve project",
+                "The active TLBS project could not be loaded.",
+            )
+            return
+
+        if project_row["project_type"] != "Receipt Processing":
+            QMessageBox.information(
+                self,
+                "Receipt Processing project required",
+                "The Receipt Manager launcher requires an active Receipt Processing project. Select or create one from the customer/project workflow.",
+            )
             return
 
         from ..core.models import Customer, Project, ProjectType, ProjectStatus
@@ -500,7 +492,17 @@ class DashboardWindow(QMainWindow):
         job_path, _ = self.receipt_bridge.ensure_receipt_job(customer, project)
         self.receipt_bridge.launch_receipt_manager(customer, project, job_path)
         self.refresh()
-        QMessageBox.information(self, "Receipt Manager launched", f"Receipt Manager job created for {customer.name} / {project.name}.")
+
+        if tool_name == "Import Receipts":
+            message = "The Receipt Manager is now open with the active receipt job context for this TLBS project. Use the legacy Import Receipts dialog to move files into Incoming."
+        elif tool_name == "Review Queue":
+            message = "The Receipt Manager is now open with the active receipt job context for this TLBS project. Use the legacy Review Receipts workflow to inspect the queued outputs."
+        elif tool_name == "Export":
+            message = "The Receipt Manager is now open with the active receipt job context for this TLBS project. Use the existing legacy export flow from the Receipt Manager window."
+        else:
+            message = f"Receipt Manager job created for {customer.name} / {project.name}."
+
+        QMessageBox.information(self, "Receipt Manager launched", message)
 
     def refresh(self):
         customer_rows = self.customers.list_recent(5)

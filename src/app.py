@@ -226,6 +226,9 @@ class MainWindow(QMainWindow):
         customer_name=os.getenv('TLBS_RECEIPT_CONTEXT_CUSTOMER','').strip()
         project_name=os.getenv('TLBS_RECEIPT_CONTEXT_PROJECT','').strip()
         job_root=os.getenv('TLBS_RECEIPT_CONTEXT_JOB_ROOT','').strip()
+        customer_id=os.getenv('TLBS_RECEIPT_CONTEXT_CUSTOMER_ID','').strip()
+        project_id=os.getenv('TLBS_RECEIPT_CONTEXT_PROJECT_ID','').strip()
+        folder_path=os.getenv('TLBS_RECEIPT_CONTEXT_FOLDER_PATH','').strip()
         if not customer_name and not project_name and not job_root:
             return
         try:
@@ -234,6 +237,8 @@ class MainWindow(QMainWindow):
                 if name.casefold()==customer_name.casefold():
                     client_id=cid
                     break
+            if client_id is None and customer_name:
+                client_id=self.db.add_client(customer_name)
             if client_id and project_name and job_root:
                 try:
                     self.db.add_job(client_id, project_name, job_root)
@@ -243,6 +248,13 @@ class MainWindow(QMainWindow):
                 if customer_name in self.client_ids:
                     self.clients.setCurrentRow(self.clients.findItems(customer_name, Qt.MatchExactly)[0].row())
                     self.client_changed(customer_name)
+            elif customer_name:
+                self.refresh_clients()
+                if customer_name in self.client_ids:
+                    self.clients.setCurrentRow(self.clients.findItems(customer_name, Qt.MatchExactly)[0].row())
+                    self.client_changed(customer_name)
+            if customer_id and project_id and folder_path:
+                self.path_label.setText(folder_path)
         except Exception:
             pass
 
