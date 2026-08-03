@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import ctypes
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
+from ctypes import wintypes
 
 from .database import Database
 from .folders import safe_name
@@ -27,6 +30,34 @@ class ReceiptProjectBridgeService:
     def __init__(self, database: Database, activity_service: ActivityService):
         self.database = database
         self.activity_service = activity_service
+
+    def _focus_existing_window(self) -> bool:
+        if os.name != "nt":
+            return False
+
+        try:
+            found: list[wintypes.HWND] = []
+
+            @ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
+            def enum_handler(hwnd: wintypes.HWND, _lparam: wintypes.LPARAM) -> bool:
+                title_length = ctypes.windll.user32.GetWindowTextLengthW(hwnd)
+                if title_length:
+                    title_buffer = ctypes.create_unicode_buffer(title_length + 1)
+                    ctypes.windll.user32.GetWindowTextW(hwnd, title_buffer, title_length + 1)
+                    if "TapeLadySuite8 Receipt Manager" in title_buffer.value:
+                        found.append(hwnd)
+                return True
+
+            ctypes.windll.user32.EnumWindows(enum_handler, 0)
+            if not found:
+                return False
+
+            hwnd = found[0]
+            ctypes.windll.user32.ShowWindow(hwnd, 9)
+            ctypes.windll.user32.SetForegroundWindow(hwnd)
+            return True
+        except Exception:
+            return False
 
     def ensure_receipt_job(self, customer: Customer, project: Project) -> tuple[Path, str]:
         project_root = Path(project.folder_path) if project.folder_path else Path.home()
@@ -54,7 +85,10 @@ class ReceiptProjectBridgeService:
         )
         return job_path, job_name
 
-    def launch_receipt_manager(self, customer: Customer, project: Project, job_root: Path) -> subprocess.Popen[str]:
+    def launch_receipt_manager(self, customer: Customer, project: Project, job_root: Path) -> tuple[subprocess.Popen[str] | None, str | None, bool]:
+        if self._focus_existing_window():
+            return None, None, True
+
         env = os.environ.copy()
         env["TLBS_RECEIPT_CONTEXT_CUSTOMER_ID"] = str(customer.id)
         env["TLBS_RECEIPT_CONTEXT_PROJECT_ID"] = str(project.id)
@@ -65,12 +99,23 @@ class ReceiptProjectBridgeService:
 
         app_root = Path(__file__).resolve().parents[2]
         src_app = app_root / "src" / "app.py"
-        return subprocess.Popen(
-            [sys.executable, str(src_app)],
-            cwd=app_root,
-            env=env,
-            creationflags=0,
-        )
+
+        try:
+            process = subprocess.Popen(
+                [sys.executable, str(src_app)],
+                cwd=app_root,
+                env=env,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                creationflags=0,
+            )
+            time.sleep(0.25)
+            if process.poll() is not None:
+                stderr = process.stderr.read().decode("utf-8", errors="ignore").strip() if process.stderr else ""
+                return None, stderr or f"Receipt Manager exited immediately with code {process.returncode}.", False
+            return process, None, False
+        except Exception as exc:
+            return None, f"Failed to start Receipt Manager: {exc}", False
 
     def _ensure_mapping(self, customer: Customer, project: Project, job_name: str, job_root: Path) -> None:
         with self.database.connect() as connection:

@@ -490,7 +490,24 @@ class DashboardWindow(QMainWindow):
         )
 
         job_path, _ = self.receipt_bridge.ensure_receipt_job(customer, project)
-        self.receipt_bridge.launch_receipt_manager(customer, project, job_path)
+        process, startup_error, reused_window = self.receipt_bridge.launch_receipt_manager(customer, project, job_path)
+        if reused_window:
+            QMessageBox.information(
+                self,
+                "Receipt Manager already running",
+                "The existing Receipt Manager window has been restored and brought to the foreground.",
+            )
+            return
+        if startup_error:
+            QMessageBox.critical(self, "Receipt Manager failed to start", startup_error)
+            return
+        if process is None or process.poll() is not None:
+            QMessageBox.critical(
+                self,
+                "Receipt Manager failed to start",
+                "The Receipt Manager subprocess did not remain running after launch.",
+            )
+            return
         self.refresh()
 
         if tool_name == "Import Receipts":
