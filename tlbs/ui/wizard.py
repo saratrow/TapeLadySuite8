@@ -15,6 +15,26 @@ from ..core.models import Customer, Project, ProjectStatus, ProjectType
 from ..core.services import CustomerService
 
 
+def _coerce_enum(enum_cls, value):
+    if isinstance(value, enum_cls):
+        return value
+    if isinstance(value, str):
+        try:
+            return enum_cls(value)
+        except ValueError:
+            return value
+    if hasattr(value, "value"):
+        try:
+            return enum_cls(value.value)
+        except ValueError:
+            return value
+    return value
+
+
+def _enum_label(value):
+    return getattr(value, "value", str(value))
+
+
 class CustomerModePage(QWizardPage):
     def __init__(self):
         super().__init__()
@@ -162,12 +182,12 @@ class ProjectDetailsPage(QWizardPage):
             self._suggest_name()
 
     def _suggest_name(self):
-        project_type = self.project_type.currentData()
+        project_type = _coerce_enum(ProjectType, self.project_type.currentData())
         if not project_type:
             return
         if self.name.text().strip() and not self.name.property("autoSuggested"):
             return
-        self.name.setText(f"{datetime.now():%Y} {project_type.value}")
+        self.name.setText(f"{datetime.now():%Y} {_enum_label(project_type)}")
         self.name.setProperty("autoSuggested", True)
 
     def validatePage(self):
@@ -184,11 +204,14 @@ class ProjectDetailsPage(QWizardPage):
             qdate = self.due_date.date()
             due = datetime(qdate.year(), qdate.month(), qdate.day())
 
+        project_type = _coerce_enum(ProjectType, self.project_type.currentData())
+        status = _coerce_enum(ProjectStatus, self.status.currentData())
+
         return Project(
             customer_id=customer_id,
             name=self.name.text().strip(),
-            project_type=self.project_type.currentData(),
-            status=self.status.currentData(),
+            project_type=project_type,
+            status=status,
             description=self.description.toPlainText().strip(),
             due_date=due,
         )
@@ -225,8 +248,8 @@ class ConfirmationPage(QWizardPage):
             f"Company: {customer.company or '—'}<br><br>"
             f"<b>Project</b><br>"
             f"Name: {project.name}<br>"
-            f"Type: {project.project_type.value}<br>"
-            f"Status: {project.status.value}<br><br>"
+            f"Type: {_enum_label(project.project_type)}<br>"
+            f"Status: {_enum_label(project.status)}<br><br>"
             f"<b>Project folder</b><br>{projected_folder}"
         )
 

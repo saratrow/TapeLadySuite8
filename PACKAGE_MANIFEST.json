@@ -1,0 +1,15 @@
+{
+  "name": "TLBS Sprint 2 Pack",
+  "version": "0.2.0-dev",
+  "python_files_compiled": 16,
+  "features": [
+    "Customer/Project Wizard",
+    "Existing customer selection",
+    "Project creation",
+    "Automatic folder structure",
+    "Activity timeline",
+    "Recent projects dashboard",
+    "SQLite migrations",
+    "Windows launcher"
+  ]
+}
